@@ -55,3 +55,6 @@ design/**/*.jpg
 !design/_icon-src-padded.png
 !design/icon-preview.png
 !design/icon-preview-adaptive.png
+
+# ---- 临时调试产物 ----
+.tmp-emulator/
