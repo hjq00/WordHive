@@ -1,0 +1,57 @@
+# ---- 凭据与密钥（绝对不能进公开仓库） ----
+.env
+.env.*
+!.env.r2.example
+.env.r2
+
+# ---- 有版权 / 大体积资料（不进公开仓库） ----
+*.pdf
+*.zip
+*.rar
+*.mp4
+*.m4v
+*.mov
+*.avi
+考研英语核心母词990（10小时刷完）/
+【红宝书】*
+
+# ---- 词库数据：由扫描件重建，版权待定，不公开 ----
+# 准备方法见 README.md「准备词库」
+src/data/words/*.js
+www/src/data/words/*.js
+src/data/enrichment.js
+www/src/data/enrichment.js
+!src/data/words/README.md
+!www/src/data/words/README.md
+
+# ---- 依赖与构建产物 ----
+node_modules/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ---- 历史版本与设计基线（含旧数据与构建缓存） ----
+versions/
+design/v16-baseline/
+design/icon-output/
+
+# ---- 本地工作数据 ----
+.workbuddy/
+*.log
+.DS_Store
+Thumbs.db
+
+# ---- 设计产物：只保留图标源与预览，去掉过程截图和数据中间产物 ----
+# design 下的 json 多为 OCR/词库/翻译中间产物，同样不公开
+design/**/*.json
+design/**/*.png
+design/**/*.jpg
+!design/_icon-src-padded.png
+!design/icon-preview.png
+!design/icon-preview-adaptive.png

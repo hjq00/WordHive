@@ -1,0 +1,19 @@
+{
+  "appId": "com.wordhive.app",
+  "appName": "WordHive",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "loggingBehavior": "debug",
+  "android": {
+    "allowMixedContent": true,
+    "pluginsConfig": {
+      "LocalNotifications": {
+        "smallIcon": "ic_stat_notify",
+        "iconColor": "#267662"
+      }
+    }
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

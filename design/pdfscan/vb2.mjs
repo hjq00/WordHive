@@ -1,0 +1,24 @@
+const list = await (await fetch('http://127.0.0.1:9450/json')).json();
+const page = list.find(x => x.type === 'page');
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise(r => ws.onopen = r);
+let id=0; const pending=new Map();
+ws.onmessage=({data})=>{const m=JSON.parse(data);if(m.id&&pending.has(m.id)){pending.get(m.id)(m);pending.delete(m.id);}};
+const cmd=(method,params={})=>new Promise(r=>{const n=++id;pending.set(n,r);ws.send(JSON.stringify({id:n,method,params}));});
+const ev=async(e)=>(await cmd('Runtime.evaluate',{expression:e,returnByValue:true,awaitPromise:true})).result?.result?.value;
+await ev(`document.querySelector('#tabbar [data-tab="study"]')?.click()`);
+await new Promise(r=>setTimeout(r,700));
+await ev(`document.querySelector('[data-book]')?.click()`);
+await new Promise(r=>setTimeout(r,900));
+const cards = await ev(`[...document.querySelectorAll('[data-b]')].map(e=>e.textContent.trim().replace(/\\s+/g,' '))`);
+console.log('词书:', JSON.stringify(cards,null,1));
+const after = await ev(`(async()=>{
+  const t=document.querySelector('[data-b="kaoyan-5500"]');
+  if(!t) return 'no card';
+  t.click(); await new Promise(r=>setTimeout(r,1200));
+  const close=document.querySelector('.sheet-mask,[data-close]');
+  close?.click(); await new Promise(r=>setTimeout(r,600));
+  return {title:document.querySelector('.ready-title')?.textContent?.trim(),sub:document.querySelector('.ready-sub')?.textContent?.trim(),newWords:document.querySelector('.ready-stat b')?.textContent?.trim()};
+})()`);
+console.log('切换后:', JSON.stringify(after));
+ws.close();

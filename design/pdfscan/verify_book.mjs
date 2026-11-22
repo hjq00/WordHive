@@ -1,0 +1,25 @@
+const list = await (await fetch('http://127.0.0.1:9450/json')).json();
+const page = list.find(x => x.type === 'page');
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise(r => ws.onopen = r);
+let id=0; const pending=new Map();
+ws.onmessage=({data})=>{const m=JSON.parse(data);if(m.id&&pending.has(m.id)){pending.get(m.id)(m);pending.delete(m.id);}};
+const cmd=(method,params={})=>new Promise(r=>{const n=++id;pending.set(n,r);ws.send(JSON.stringify({id:n,method,params}));});
+const ev=async(e)=>(await cmd('Runtime.evaluate',{expression:e,returnByValue:true,awaitPromise:true})).result?.result?.value;
+await ev(`document.querySelector('#tabbar [data-tab="study"]')?.click()`);
+await new Promise(r=>setTimeout(r,800));
+await ev(`document.querySelector('[data-book]')?.click()`);
+await new Promise(r=>setTimeout(r,900));
+const books = await ev(`[...document.querySelectorAll('[data-pick-book], .book-item, .book-row')].map(e=>e.textContent.trim().replace(/\\s+/g,' ').slice(0,50))`);
+console.log('词书列表:', JSON.stringify(books));
+const picked = await ev(`(async()=>{
+  const items=[...document.querySelectorAll('[data-pick-book], .book-item, .book-row')];
+  const t=items.find(e=>e.textContent.includes('5500'));
+  if(!t) return 'not found';
+  t.click(); await new Promise(r=>setTimeout(r,1200));
+  return document.querySelector('.ready-sub')?.textContent?.trim();
+})()`);
+console.log('切换后副标题:', picked);
+const info = await ev(`(()=>({title:document.querySelector('.ready-title')?.textContent?.trim(),sub:document.querySelector('.ready-sub')?.textContent?.trim(),newWords:document.querySelector('.ready-stat b')?.textContent?.trim()}))()`);
+console.log('当前词书:', JSON.stringify(info));
+ws.close();
