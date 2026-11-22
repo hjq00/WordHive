@@ -32,7 +32,9 @@ cd android && ./gradlew assembleDebug
 
 ## 视频课
 
-视频未随源码分发，默认从一个公开的 Cloudflare R2 地址在线播放。换成自己的存储：App「我的 → 视频课地址」填直链前缀（末尾不带斜杠）。上传脚本：`scripts/r2-upload.mjs`。
+**视频课就放在本仓库的「考研英语核心母词990（10小时刷完）」文件夹里**（共 30 讲，约 1.5GB，通过 Git LFS 存储）。clone 后执行 `git lfs pull` 即可取回全部视频，把文件夹放到项目根目录，App 就能本地播放。
+
+默认也可以从公开的 Cloudflare R2 地址在线播放，无需下载。换成自己的存储：App「我的 → 视频课地址」填直链前缀（末尾不带斜杠）。上传脚本：`scripts/r2-upload.mjs`。
 
 ## 许可
 
