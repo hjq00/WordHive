@@ -1,11 +1,12 @@
 import { BOOKS, ALL_WORDS, WORD_MAP, getBook } from '../data/books.js';
-import { DAY, blankCard, schedule, retention, stateLabel } from './srs.js';
+import { DAY, blankCard, schedule, retention, stateLabel, migrateCard } from './srs.js';
 
 const KEY = 'wordhive.app.v1';
+const round = (v, n) => { const p = 10 ** n; return Math.round(v * p) / p; };
 const listeners = new Set();
 
 const DEFAULTS = {
-  version: 1,
+  version: 2,
   createdAt: 0,
   settings: {
     bookId: 'kaoyan',
@@ -23,21 +24,33 @@ const DEFAULTS = {
     sensitivity: 'standard',
     showDwell: true,
     api: { base: '', key: '', model: '' },
-    watchSite: ''
+    watchSite: '',
+    targetRetention: 0.9,
+    notifySmart: true,
+    notifyMax: 2,
+    notifyTone: 'gentle'
   },
   cards: {},
   favs: [],
   days: {},
   lastRemind: '',
+  notifyLog: [],
   demo: false
 };
+
+function migrateState(s) {
+  const need = s.version < 2 || Object.values(s.cards || {}).some((c) => c && (c.alg !== 2 || !(Number(c.s) > 0) || !(Number(c.d) >= 1)));
+  if (!need) return;
+  Object.keys(s.cards || {}).forEach((id) => { s.cards[id] = migrateCard(s.cards[id]); });
+  s.version = 2;
+}
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return structuredClone(DEFAULTS);
     const parsed = JSON.parse(raw);
-    return {
+    const next = {
       ...structuredClone(DEFAULTS),
       ...parsed,
       settings: { ...DEFAULTS.settings, ...(parsed.settings || {}), api: { ...DEFAULTS.settings.api, ...((parsed.settings || {}).api || {}) } },
@@ -45,6 +58,8 @@ function load() {
       favs: Array.isArray(parsed.favs) ? parsed.favs : [],
       days: parsed.days || {}
     };
+    migrateState(next);
+    return next;
   } catch {
     return structuredClone(DEFAULTS);
   }
@@ -175,7 +190,7 @@ export function gradeWord(id, grade, meta = {}) {
   const word = WORD_MAP.get(id);
   if (!word) return null;
   const prev = state.cards[id];
-  const next = schedule(prev || blankCard(), grade, Date.now());
+  const next = schedule(prev || blankCard(), grade, Date.now(), state.settings.targetRetention);
   next.auto = !!meta.auto;
   next.dwell = Math.round(meta.dwell || 0);
   next.grade = grade;
@@ -210,6 +225,8 @@ export function stats() {
   const avgRetention = cards.length
     ? cards.reduce((sum, c) => sum + retention(c), 0) / cards.length
     : 0;
+  const avgStability = cards.length ? round(cards.reduce((a, c) => a + (Number(c.s) || 0), 0) / cards.length, 2) : 0;
+  const avgDifficulty = cards.length ? round(cards.reduce((a, c) => a + (Number(c.d) || 0), 0) / cards.length, 1) : 0;
 
   return {
     counts,
@@ -217,6 +234,8 @@ export function stats() {
     totalLearned,
     favCount: state.favs.length,
     avgRetention,
+    avgStability,
+    avgDifficulty,
     streak: streak(),
     dueCount: dueQueue().length
   };
@@ -264,6 +283,14 @@ export function dueForecast() {
 }
 
 /* ---------------- 设置 ---------------- */
+export function recordNotify(at = Date.now()) {
+  update((s) => {
+    if (!Array.isArray(s.notifyLog)) s.notifyLog = [];
+    s.notifyLog.push(at);
+    if (s.notifyLog.length > 20) s.notifyLog = s.notifyLog.slice(-20);
+  }, true);
+}
+
 export function setSetting(path, value) {
   const keys = path.split('.');
   let obj = state.settings;
@@ -301,6 +328,7 @@ export function importData(file) {
         if (state.settings.accent !== 'uk') state.settings.accent = 'us';
         state.favs = data.favs || [];
         state.days = data.days || {};
+        migrateState(state);
         emit();
         resolve(true);
       } catch (err) {
@@ -340,7 +368,7 @@ export function seedDemo() {
     const p = plan[i];
     const due = p.due !== undefined ? now + p.due * DAY : now + p.interval * DAY;
     const ago = p.ago !== undefined ? p.ago : Math.max(0.3, p.interval * 0.7);
-    state.cards[w.id] = {
+    state.cards[w.id] = migrateCard({
       ...blankCard(),
       state: p.state,
       interval: p.interval,
@@ -350,7 +378,7 @@ export function seedDemo() {
       last: now - ago * DAY,
       due,
       hist: []
-    };
+    });
   });
   state.favs = [BOOKS[0].words[2]?.id, BOOKS[0].words[3]?.id, BOOKS[0].words[5]?.id].filter(Boolean);
   const counts = [

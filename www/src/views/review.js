@@ -356,6 +356,8 @@ export function createReviewView({ onGoStudy } = {}) {
         <i class="rv-div" aria-hidden="true"></i>
         <div class="rv-metric"><b class="${retentionClass}">${retentionValue}%</b><span>保持率</span></div>
         <i class="rv-div" aria-hidden="true"></i>
+        <div class="rv-metric"><b>${Math.round(Number(stats.avgStability) || 0)} 天</b><span>平均稳定性</span></div>
+        <i class="rv-div" aria-hidden="true"></i>
         <div class="rv-metric"><b>${todayDone}</b><span>今日已学</span></div>
       </div>
 
@@ -441,7 +443,7 @@ export function createReviewView({ onGoStudy } = {}) {
       </div>
       <div id="tab-body" class="rv-tab-body">${tabBody(due, learned, favs, mastered)}</div>
       <p class="rv-note">
-        复习时间由停留判定决定：不认识 10 分钟后再来，模糊约半天，认识按间隔往后推。
+        不认识 10 分钟后重现；模糊与认识按目标保持率自动拉长间隔。
       </p>
     </div>`;
 

@@ -2,6 +2,7 @@ import { icon } from './core/icons.js';
 import { esc, h, toast } from './core/ui.js';
 import * as store from './core/store.js';
 import * as notify from './core/notify.js';
+import { planNotifications, peakStudyHour } from './core/notify-plan.js';
 import { createStudyView } from './views/study.js';
 import { createReviewView } from './views/review.js';
 import { createLibraryView } from './views/library.js';
@@ -74,7 +75,7 @@ function makeView(tab) {
   if (tab === 'review') return createReviewView({ onGoStudy: () => switchTab('study') });
   if (tab === 'library') return createLibraryView();
   if (tab === 'ai') return createAIView({ onGoStudy: () => switchTab('study') });
-  return createMeView(opts);
+  return createMeView({ ...opts, onNotifyChange: refreshNotificationPlan });
 }
 
 /* 视图缓存：切 tab 时复用已建好的视图（每次销毁重建会让主线程卡一下） */
@@ -167,24 +168,51 @@ function switchTab(tab) {
 let reminderTimer = null;
 function checkReminder() {
   const st = store.getState();
-  const due = store.dueQueue().length;
+  const dueList = store.dueQueue();
+  const due = dueList.length;
   if (!due) return;
-  const [h, m] = String(st.settings.remindAt || '20:00').split(':').map(Number);
-  const now = new Date();
-  if (now.getHours() * 60 + now.getMinutes() < h * 60 + m) return;
-  if (st.lastRemind === store.dateKey(now)) return;
+  const nowDate = new Date();
+
+  /* 与 refreshNotificationPlan 共用同一份上下文：交给 planNotifications 决定当前该说什么 */
+  const now = nowDate.getTime();
+  const overdueCount = dueList.filter((x) => x.card.due < now - 3600000).length;
+  const log = st.notifyLog || [];
+  const peak = peakStudyHour(Object.values(st.cards), now);
+  const plan = planNotifications({
+    now,
+    dueCount: due,
+    overdueCount,
+    stats: store.stats(),
+    settings: st.settings,
+    dayKey: store.dateKey(nowDate),
+    lastNotifyAt: log.length ? Math.max(...log) : 0,
+    peak,
+    notifyToday: log.filter((t) => store.dateKey(new Date(t)) === store.dateKey(nowDate)).length
+  });
+  const slot = plan.slots && plan.slots[0];
+  /* 智能时段到点才提醒；plan 无槽位时回退到固定 remindAt */
+  const [fallbackH, fallbackM] = String(st.settings.remindAt || '20:00').split(':').map(Number);
+  const gate = slot ? (slot.hour * 60 + slot.minute) : (fallbackH * 60 + fallbackM);
+  if (nowDate.getHours() * 60 + nowDate.getMinutes() < gate) return;
+  if (st.lastRemind === store.dateKey(nowDate)) return;
   store.update((s) => {
-    s.lastRemind = store.dateKey(now);
+    s.lastRemind = store.dateKey(nowDate);
   }, true);
-  showReminder(due);
-  notify.notifyDue(due);
+  const title = slot ? slot.title : 'WordHive · 该复习了';
+  const body = slot ? slot.body : `今天有 ${due} 个词到期，5 分钟就能清完。`;
+  const priority = slot ? slot.priority : undefined;
+  Promise.resolve(notify.notifySmart({ title, body, priority }))
+    .then((ok) => { if (ok === false) notify.notifyDue(due); })
+    .catch(() => notify.notifyDue(due));
+  showReminder(due, body);
+  store.recordNotify();
 }
 
-function showReminder(count) {
+function showReminder(count, body) {
   document.querySelector('.reminder')?.remove();
   const bar = h(`<div class="reminder">
     <span class="r-ic">${icon('clock', 17)}</span>
-    <div class="r-txt"><b>${count} 个词到点了</b><span>按记忆曲线，现在复习最省力</span></div>
+    <div class="r-txt"><b>${count} 个词到点了</b><span>${esc(body || '按记忆曲线，现在复习最省力')}</span></div>
     <button class="r-go" data-go>去复习</button>
     <button class="r-x" data-x aria-label="关闭">${icon('close', 14)}</button>
   </div>`);
@@ -197,6 +225,41 @@ function showReminder(count) {
   });
   bar.querySelector('[data-x]').addEventListener('click', () => bar.remove());
   setTimeout(() => bar.remove(), 15000);
+}
+
+/* 智能通知排期：按到期负荷 / 学习高峰合并生成，800ms 防抖避免同帧多次评分反复重排 */
+let planTimer = null;
+let planDay = '';
+let planSig = '';
+async function refreshNotificationPlan() {
+  try {
+    const st = store.getState();
+    const now = Date.now();
+    const due = store.dueQueue(now);
+    const overdueCount = due.filter((x) => x.card.due < now - 3600000).length;
+    const peak = peakStudyHour(Object.values(st.cards), now);
+    const log = st.notifyLog || [];
+    const plan = planNotifications({
+      now,
+      dueCount: due.length,
+      overdueCount,
+      stats: store.stats(),
+      settings: st.settings,
+      dayKey: store.dateKey(now),
+      lastNotifyAt: log.length ? Math.max(...log) : 0,
+      peak,
+      notifyToday: log.filter((t) => store.dateKey(new Date(t)) === store.dateKey(now)).length
+    });
+    const perm = await notify.status();
+    if (perm.display !== 'granted') return;
+    await notify.schedulePlan(plan);
+  } catch (err) {
+    console.error(err);
+  }
+}
+function debounceRefreshPlan() {
+  clearTimeout(planTimer);
+  planTimer = setTimeout(refreshNotificationPlan, 800);
 }
 
 /* 启动 */
@@ -219,19 +282,20 @@ if (deepWord) {
   }, 250);
 }
 
-// 每日定时提醒：仅在已授权时注册；App 关闭也能触发（原生）
-(async () => {
-  const st = store.getState();
-  if (!st.settings.remindAt) return;
-  const perm = await notify.status();
-  if (perm.display !== 'granted') return;
-  await notify.scheduleDaily(st.settings.remindAt, store.dueQueue().length);
-})();
+// 智能通知排期：启动时算一次（内部检查授权；未授权也保留应用内提醒条）
+planDay = store.dateKey();
+refreshNotificationPlan();
 
 checkReminder();
 reminderTimer = setInterval(checkReminder, 60000);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) checkReminder();
+  if (document.hidden) return;
+  const day = store.dateKey();
+  if (day !== planDay) {
+    planDay = day;
+    refreshNotificationPlan();
+  }
+  checkReminder();
 });
 
 let tabbarRaf = null;
@@ -241,15 +305,24 @@ store.subscribe(() => {
   tabbarRaf = requestAnimationFrame(() => {
     tabbarRaf = null;
     renderTabbar();
+    const dueNow = store.dueQueue().length;
     const reminder = document.querySelector('.reminder');
-    if (reminder && !store.dueQueue().length) reminder.remove();
+    if (reminder && !dueNow) reminder.remove();
+    const st = store.getState();
+    const s = st.settings;
+    const sig = JSON.stringify([dueNow, (st.notifyLog || []).length,
+      s.remindAt, s.notifySmart, s.notifyMax, s.notifyTone, s.targetRetention]);
+    if (sig !== planSig) {
+      planSig = sig;
+      debounceRefreshPlan();
+    }
   });
 });
 
 window.addEventListener('beforeunload', () => clearInterval(reminderTimer));
 
 /* 便于调试 */
-window.__wordhive = { store, switchTab, toast };
+window.__wordhive = { store, switchTab, toast, refreshNotificationPlan, notify };
 
 if (params.get('debug') === '1') {
   setTimeout(() => {

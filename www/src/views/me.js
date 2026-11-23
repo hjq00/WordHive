@@ -6,7 +6,7 @@ import { BOOKS } from '../data/books.js';
 import { hasLLM } from '../core/ai.js';
 import { speechSupported } from '../core/speech.js';
 
-export function createMeView({ onGoReview } = {}) {
+export function createMeView({ onGoReview, onNotifyChange } = {}) {
   const el = h('<div class="screen"></div>');
   let notifState = { display: 'prompt', native: false };
   // 异步读取真实通知权限（原生插件需要 await）
@@ -76,6 +76,30 @@ export function createMeView({ onGoReview } = {}) {
         <div class="setting">
           <div class="lbl"><b>系统通知</b><span>${notifHint}</span></div>
           ${notifOn ? '<span class="chip accent">已开启</span>' : notifPerm === 'unsupported' ? '<span class="chip">不支持</span>' : notifPerm === 'denied' ? '<span class="chip">已被拒绝，请在系统设置中开启</span>' : `<button class="chip-btn" data-notify>开启通知</button>`}
+        </div>
+        <div class="setting">
+          <div class="lbl"><b>智能提醒时间</b><span>按你的复习高峰自动选提醒时间</span></div>
+          <button class="switch ${s.notifySmart !== false ? 'on' : ''}" data-switch="notifySmart" aria-label="智能提醒时间"></button>
+        </div>
+        <div class="setting">
+          <div class="lbl"><b>每日提醒次数</b><span>一天最多提醒几次</span></div>
+          <select data-notify-max style="width:90px;padding:7px 8px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);font-size:12.5px">
+            ${[1, 2, 3].map((n) => `<option value="${n}" ${Number(s.notifyMax) === n ? 'selected' : ''}>${n} 次</option>`).join('')}
+          </select>
+        </div>
+        <div class="setting">
+          <div class="lbl"><b>提醒语气</b><span>通知文案的口吻</span></div>
+          <select data-notify-tone style="width:90px;padding:7px 8px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);font-size:12.5px">
+            <option value="gentle" ${(s.notifyTone || 'gentle') === 'gentle' ? 'selected' : ''}>温和</option>
+            <option value="lively" ${s.notifyTone === 'lively' ? 'selected' : ''}>轻快</option>
+            <option value="plain" ${s.notifyTone === 'plain' ? 'selected' : ''}>简洁</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="lbl"><b>目标保持率</b><span>影响间隔拉长的速度</span></div>
+          <select data-target style="width:90px;padding:7px 8px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);font-size:12.5px">
+            ${[0.85, 0.9, 0.95].map((r) => `<option value="${r}" ${Number(s.targetRetention || 0.9) === r ? 'selected' : ''}>${Math.round(r * 100)}%</option>`).join('')}
+          </select>
         </div>
         <div class="setting">
           <div class="lbl"><b>停留判定</b><span>${s.sensitivity === 'strict' ? '2.2s / 4s，更敏感' : s.sensitivity === 'loose' ? '1.1s / 6.5s，更宽容' : '2.3s / 6s，推荐'}</span></div>
@@ -196,7 +220,7 @@ export function createMeView({ onGoReview } = {}) {
           <div class="lbl"><b>停留即判定</b><span style="font-size:12px;line-height:1.6">在一个词上停留多久，就自动记为认识、模糊或不认识，不用手点。</span></div>
         </div>
         <div class="setting">
-          <div class="lbl"><b>间隔复习</b><span style="font-size:12px;line-height:1.6">按遗忘曲线安排回访，第二天的复习比第二十天重要得多。</span></div>
+          <div class="lbl"><b>间隔复习（FSRS 风格：稳定性 / 难度 / 可提取性）</b><span style="font-size:12px;line-height:1.6">按遗忘曲线安排回访，第二天的复习比第二十天重要得多。</span></div>
         </div>
         <div class="setting">
           <div class="lbl"><b>语境素材</b><span style="font-size:12px;line-height:1.6">真题阅读、听力与长难句，按考研一、考研二、六级分类。</span></div>
@@ -235,6 +259,7 @@ export function createMeView({ onGoReview } = {}) {
         const next = !store.getState().settings[key];
         store.setSetting(key, next);
         if (key === 'dark') document.documentElement.dataset.theme = next ? 'dark' : 'light';
+        if (key === 'notifySmart') onNotifyChange?.();
         render();
       })
     );
@@ -249,8 +274,8 @@ export function createMeView({ onGoReview } = {}) {
       store.setSetting('remindAt', value);
       const perm = await notify.status();
       if (perm.display === 'granted') {
-        const ok = await notify.scheduleDaily(value, store.dueQueue().length);
-        toast(ok ? `每日提醒已设为 ${value}` : `已设为 ${value}（打开应用时生效）`);
+        onNotifyChange?.();
+        toast(perm.native ? `每日提醒已设为 ${value}` : `已设为 ${value}（打开应用时生效）`);
       } else {
         toast(`提醒时间 ${value}，开启系统通知后生效`);
       }
@@ -259,8 +284,7 @@ export function createMeView({ onGoReview } = {}) {
       const granted = await notify.request();
       notifState = await notify.status();
       if (granted) {
-        const st = store.getState();
-        await notify.scheduleDaily(st.settings.remindAt, store.dueQueue().length);
+        onNotifyChange?.();
         toast('已开启：每天到点提醒，App 关闭也有效');
       } else {
         toast('未授权，仍会在应用内提醒');
@@ -271,6 +295,21 @@ export function createMeView({ onGoReview } = {}) {
       store.setSetting('sensitivity', e.target.value);
       toast('判定灵敏度已更新');
       render();
+    });
+    el.querySelector('[data-notify-max]')?.addEventListener('change', (e) => {
+      store.setSetting('notifyMax', Number(e.target.value));
+      onNotifyChange?.();
+      toast(`每日提醒设为 ${e.target.value} 次`);
+    });
+    el.querySelector('[data-notify-tone]')?.addEventListener('change', (e) => {
+      store.setSetting('notifyTone', e.target.value);
+      onNotifyChange?.();
+      toast('提醒语气已更新');
+    });
+    el.querySelector('[data-target]')?.addEventListener('change', (e) => {
+      store.setSetting('targetRetention', Number(e.target.value));
+      onNotifyChange?.();
+      toast(`目标保持率设为 ${Math.round(Number(e.target.value) * 100)}%`);
     });
     el.querySelector('[data-accent]')?.addEventListener('change', (e) => {
       const accent = e.target.value === 'uk' ? 'uk' : 'us';

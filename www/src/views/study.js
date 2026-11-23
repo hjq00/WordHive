@@ -579,7 +579,7 @@ export function mountDeck(deckEl, words, opts = {}) {
 
 export function openGradeSheet(word, existing, onChange) {
   const card = store.getState().cards[word.id] || blankCard();
-  const options = previewIntervals(card);
+  const options = previewIntervals(card, Date.now(), store.getState().settings.targetRetention);
   const content = h(`
     <div>
       <p class="small" style="margin:0 0 14px;color:var(--muted);line-height:1.65">

@@ -542,3 +542,22 @@ Set-Location 'E:\workbuddy工作区\背单词软件\android'
 - APK 内 assets 已确认：store.js 为 wordhive.app.v1、main.js 为 __wordhive、关于页数据来源为简洁授权版
 - 当前版本目录 grep 旧包名 / 旧 key / 旧句柄 /「轻词」→ 0 命中（历史存档目录排除）
 - zipalign 通过；全量 node --check 通过；src/www 与 assets/www diff 无输出
+
+
+## 三十五、记忆系统与复习通知（v2）
+
+### 一、FSRS 风格记忆模型
+- 采用 FSRS 风格参数化模型，卡片在原有 `state / ease / interval / due / reps / lapses / last / hist` 之外新增稳定性 `s`、难度 `d`、算法标记 `alg` 三个字段。
+- 目标保持率（`targetRetention`，默认 0.9）决定间隔拉长的速度：保持率越高，安排得越密。
+- 老数据无需手动处理：读取时由 `srs.js` 的 `migrateCard(card)` 自动迁移，历史卡片与备份导入均可平滑升级。
+
+### 二、智能复习通知
+- 依据卡片到期负荷、逾期数量与用户学习高峰（`notify-plan.js` 的 `peakStudyHour`）动态生成每日通知排期，替代原来单一的固定时间提醒。
+- 可配置项均在「我的 → 学习设置」：智能提醒时间（`notifySmart`）、每日提醒次数（`notifyMax`，1/2/3）、提醒语气（`notifyTone`：gentle/lively/plain）、目标保持率（`targetRetention`：0.85/0.9/0.95）。
+- 未授权系统通知时跳过原生调度，仍保留应用内提醒条；通知触发记录写入 `notifyLog`，供按日去重与频次控制使用。
+
+### 三、验证要点
+- 语法：`for f in $(find src -name '*.js'); do node --check "$f"; done`，改后对 `www/` 副本同样跑一遍。
+- 一致性：`diff -q src/main.js www/src/main.js` 及各 `views/*.js` 应无输出（www 为运行副本，必须同步）。
+- 迁移与数据：`?demo=1` 载入示例进度，确认旧卡片字段自动补齐且统计页正常显示平均稳定性 / 平均难度。
+- 通知调度：设置页改动任一通知项后，观察 `window.__wordhive.refreshNotificationPlan()` 是否重排（`window.__wordhive` 已暴露该句柄）。

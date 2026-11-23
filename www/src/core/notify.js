@@ -66,7 +66,11 @@ function plugin() {
 
 const DAILY_ID = 1001;
 const DUE_ID = 1002;
+/** 智能方案占用的通知 id，避免与遗留每日通知冲突 */
+const PLAN_IDS = [1100, 1101, 1102];
 let lastDueNotify = 0;
+let lastSmartPriority = null;
+const tapHandlers = [];
 
 /** 把 { hour, minute } 归一化，避免 NaN / 越界传进原生 */
 function parseTime(remindAt) {
@@ -179,7 +183,111 @@ export async function notifyDue(dueCount) {
   }
 }
 
+/**
+ * 按智能方案注册每日通知（仅原生生效）。
+ * @param {{slots: Array<{id:number,title:string,body:string,hour:number,minute:number}>}} plan
+ * @returns {Promise<boolean>} 任一槽位失败返回 false；Web 环境返回 false
+ */
+export async function schedulePlan(plan) {
+  const p = plugin();
+  if (!p) return false;
+  const cancelIds = [{ id: DAILY_ID }, ...PLAN_IDS.map((id) => ({ id }))];
+  try {
+    await p.cancel({ notifications: cancelIds });
+    const slots = Array.isArray(plan?.slots) ? plan.slots : [];
+    for (const slot of slots) {
+      await p.schedule({
+        notifications: [
+          {
+            id: slot.id,
+            title: slot.title,
+            body: slot.body,
+            schedule: { every: 'day', on: { hour: slot.hour, minute: slot.minute } },
+            sound: null,
+            autoCancel: true
+          }
+        ]
+      });
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** 取消智能方案与遗留每日通知 */
+export async function cancelPlan() {
+  const p = plugin();
+  if (!p) return;
+  try {
+    await p.cancel({
+      notifications: [{ id: DAILY_ID }, ...PLAN_IDS.map((id) => ({ id }))]
+    });
+  } catch (_) {
+    /* 忽略：没排过期或原生不可用时无需处理 */
+  }
+}
+
+/**
+ * 智能即时提醒：复用 30 分钟节流与原生/Web 降级；priority 仅作记录，不影响发送。
+ * @param {{title?:string, body?:string, priority?:string}} opts
+ */
+export async function notifySmart({ title, body, priority } = {}) {
+  const now = Date.now();
+  if (now - lastDueNotify < 30 * 60 * 1000) return;
+  lastDueNotify = now;
+  lastSmartPriority = priority || null;
+
+  const t = title || 'WordHive · 该复习了';
+  const b = body || '打开 WordHive，按记忆曲线安排今天的复习。';
+  const p = plugin();
+  if (p) {
+    try {
+      const s = await status();
+      if (s.display !== 'granted') return;
+      await p.schedule({
+        notifications: [
+          {
+            id: DUE_ID,
+            title: t,
+            body: b,
+            /* 原生按 yyyy-MM-dd'T'HH:mm:ss.SSS'Z' 解析，toISOString 正好一致 */
+            schedule: { at: new Date(Date.now() + 1000).toISOString() },
+            autoCancel: true
+          }
+        ]
+      });
+      return;
+    } catch (_) {
+      /* 降级到 Web 通知 */
+    }
+  }
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(t, { body: b });
+    } catch (_) {
+      /* 忽略 */
+    }
+  }
+}
+
+/** 注册通知点击回调，返回取消订阅函数（不依赖原生事件监听） */
 export function onNotificationTap(handler) {
-  // 原生回调在 App 内由 Capacitor 处理，这里保留接口
-  return () => {};
+  if (typeof handler !== 'function') return () => {};
+  tapHandlers.push(handler);
+  return () => {
+    const i = tapHandlers.indexOf(handler);
+    if (i >= 0) tapHandlers.splice(i, 1);
+  };
+}
+
+/** 逐个派发通知点击 payload，单个订阅者失败不影响其它 */
+export function emitNotificationTap(payload) {
+  tapHandlers.slice().forEach((fn) => {
+    try {
+      fn(payload);
+    } catch (_) {
+      /* 单个订阅者失败不影响其它 */
+    }
+  });
 }
