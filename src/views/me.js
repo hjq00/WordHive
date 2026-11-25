@@ -215,7 +215,7 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
       <div class="card" style="padding:16px">
         <div class="row between" style="align-items:baseline">
           <b style="font-size:16px;letter-spacing:0.2px">WordHive</b>
-          <span class="tiny muted">v1.1</span>
+          <span class="tiny muted">v1.2</span>
         </div>
         <p class="small" style="margin:6px 0 10px;line-height:1.7">把单词酿成记忆。</p>
         <p class="tiny muted" style="margin:0;line-height:1.75">
