@@ -122,6 +122,14 @@ export function planNotifications(ctx = {}) {
     plain: 'WordHive 每日提醒：暂无到期词。'
   };
 
+  /* 次数达上限（frequency_cap）时**有**到期词，只是今天不再催：
+     文案必须带上真实到期数，绝不能说「没有到期的词」——事实相反 */
+  const CAPPED_BODY = {
+    gentle: `今天还有 ${dueCount} 个词到期，今天先到这儿，明天早点来清。`,
+    lively: `${dueCount} 个词还在等你，明天早点来清掉。`,
+    plain: `WordHive 提醒：还有 ${dueCount} 个词到期。`
+  };
+
   /**
    * 基线槽位：永远至少排一条每日提醒。
    *
@@ -130,6 +138,7 @@ export function planNotifications(ctx = {}) {
    * 就再也不会收到任何提醒（这正是「从不打开应用/清完复习后收不到提醒」的根因）。
    * 所以 no_due / frequency_cap 也返回一条 id=1100 的低优先级兜底提醒，
    * 时间取基准时间（智能高峰有置信度时用高峰小时，否则用 remindAt），并过静默时段顺延。
+   * 文案按 reason 分流：no_due 说「来学新词」，frequency_cap 说「还有 N 个词到期」。
    *
    * @param {string} reason 'no_due' | 'frequency_cap'
    */
@@ -142,7 +151,7 @@ export function planNotifications(ctx = {}) {
           hour: at.hour,
           minute: at.minute,
           title: titleFor(tone),
-          body: BASE_BODY[tone],
+          body: reason === 'frequency_cap' ? CAPPED_BODY[tone] : BASE_BODY[tone],
           priority: 'low'
         }
       ],
