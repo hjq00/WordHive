@@ -275,6 +275,35 @@ function parseJSON(text) {
   };
 }
 
+/**
+ * 在线词典兜底：让大模型按固定 JSON 结构查一个英文词。
+ * 与 generate() 共用 chat()，但不复用 parseJSON()（后者强制要求 paras 字段）。
+ *
+ * @param {string} word 用户输入的英文单词
+ * @param {object} settings store.getState().settings
+ * @returns {Promise<{ok:boolean, reason?:string, data?:object, message?:string}>}
+ */
+export async function lookupWord(word, settings) {
+  if (!hasLLM(settings)) return { ok: false, reason: 'no_llm' };
+  const target = String(word || '').trim();
+  const system = '你是英语词典助手。只输出严格 JSON，不要解释或 Markdown。';
+  const user = `请查询英文词 "${target}" 的中文释义。要求：
+1) 若它不是有效英文单词，只返回 {"error":"not_a_word"}；
+2) 否则返回严格 JSON：{"word":"","phonetic":"","meanings":[{"pos":"","zh":""}],"example":{"en":"","zh":""},"notes":""}；
+3) meanings 最多 5 项，pos 写词性（如 n. / v. / adj.），zh 写自然中文释义；example 给 1 个英文例句及其中文翻译；notes 写常用搭配，没有则留空；
+4) 不要输出任何解释、注释或 Markdown 代码块。`;
+  try {
+    const raw = await chat(settings, system, user);
+    const cleaned = String(raw).replace(/```(?:json)?/gi, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start < 0 || end < 0) throw new Error('模型没有返回 JSON');
+    return { ok: true, data: JSON.parse(cleaned.slice(start, end + 1)) };
+  } catch (err) {
+    return { ok: false, reason: 'error', message: err?.message };
+  }
+}
+
 export async function generate({ mode = 'reading', topic = 'exam', level = 'medium', words = [], settings }) {
   const list = words.slice(0, 10);
   const wordLine = list.map((w) => `${w.w} (${w.defs?.[0]?.[0] || ''} ${zhOf(w)})`).join('; ');

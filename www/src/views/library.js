@@ -6,6 +6,7 @@ import { findWord } from '../data/books.js';
 import { speak, speakSequence, stopSpeaking, speechSupported } from '../core/speech.js';
 import * as store from '../core/store.js';
 import { openWordDetail } from './detail.js';
+import { searchButtonHTML, bindSearchButton } from './search.js';
 
 const TABS = [
   { id: 'read', name: '真题阅读', icon: 'bookOpen' },
@@ -101,6 +102,7 @@ function readingPage(item) {
     title: '真题精读',
     subtitle: item.source,
     content: wrap,
+    headExtra: searchButtonHTML(),
     /* 返回/关闭二级页时：停朗读、收起可能开着的生词表抽屉 */
     onClose: () => {
       pageGone = true;
@@ -108,6 +110,7 @@ function readingPage(item) {
       vsheet?.close();
     }
   });
+  bindSearchButton(page.page);
   bindWords(wrap);
 
   /* ------ 悬浮胶囊：翻译（译文/原文） ------ */
@@ -267,7 +270,14 @@ function listeningPage(item) {
   </div>`);
 
   let cancel = null;
-  const page = pushPage({ title: '听力精听', subtitle: item.source, content: wrap, onClose: () => cancel?.() });
+  const page = pushPage({
+    title: '听力精听',
+    subtitle: item.source,
+    content: wrap,
+    headExtra: searchButtonHTML(),
+    onClose: () => cancel?.()
+  });
+  bindSearchButton(page.page);
   const rates = [0.9, 0.75, 1.15];
   let rateIdx = 0;
 
@@ -364,7 +374,14 @@ function longPage(item) {
       <div class="quote"><div class="zh" style="margin:0;color:var(--ink-2);font-size:13px;line-height:1.75">${esc(item.tip)}</div></div>
     </div>
   </div>`);
-  const page = pushPage({ title: '长难句', subtitle: item.source, content: wrap, onClose: () => stopSpeaking() });
+  const page = pushPage({
+    title: '长难句',
+    subtitle: item.source,
+    content: wrap,
+    headExtra: searchButtonHTML(),
+    onClose: () => stopSpeaking()
+  });
+  bindSearchButton(page.page);
   wrap.querySelector('[data-say]').addEventListener('click', () => speak(item.en, { rate: store.getState().settings.ttsRate }));
   wrap.querySelector('[data-zh]').addEventListener('click', (e) => {
     const zh = wrap.querySelector('.ls-block .zh');
@@ -407,8 +424,10 @@ function lecturePage(start = 0) {
     title: '视频课',
     subtitle: '考研英语核心母词 990',
     content: wrap,
+    headExtra: searchButtonHTML(),
     onClose: () => { video?.pause(); if (objectUrl) URL.revokeObjectURL(objectUrl); }
   });
+  bindSearchButton(page.page);
   page.page.classList.add('page-lecture');
   video = wrap.querySelector('video');
   const title = wrap.querySelector('[data-title]');
@@ -556,7 +575,10 @@ export function createLibraryView() {
     <div class="page">
       <div class="page-head">
         <div><h1>素材</h1><p class="sub">在真实语境里再遇见这些词</p></div>
-        <span class="ui-badge">${total} 篇 · ${LECTURES.length} 视频</span>
+        <div class="row" style="gap:8px;align-items:center">
+          ${searchButtonHTML()}
+          <span class="ui-badge">${total} 篇 · ${LECTURES.length} 视频</span>
+        </div>
       </div>
 
       <section class="ui-card sm">
@@ -609,6 +631,7 @@ export function createLibraryView() {
         }
       })
     );
+    bindSearchButton(el);
   }
 
   render();

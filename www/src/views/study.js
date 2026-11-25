@@ -6,6 +6,7 @@ import { blankCard, previewIntervals, stateLabel } from '../core/srs.js';
 import { openWordDetail, sylToggleAttrs, bindSyllableToggle, swipeBlockHTML, bindSwipe } from './detail.js';
 import { BOOKS } from '../data/books.js';
 import { sensOf } from '../core/sens.js';
+import { searchButtonHTML, bindSearchButton } from './search.js';
 
 const RING = 2 * Math.PI * 9;
 let lastDeck = null;
@@ -637,6 +638,7 @@ export function createStudyView({ onBookChange, onGoReview } = {}) {
 
     return `
       <div class="ready">
+        ${searchButtonHTML()}
         <div class="ready-inner${playIntro ? ' ready-in' : ''}">
           <div class="ready-mark${anim}" ${step(0)}>${icon('bookOpen', 26)}</div>
           <h1 class="ready-title${anim}" ${step(1)}>${esc(book.name)}</h1>
@@ -679,7 +681,7 @@ export function createStudyView({ onBookChange, onGoReview } = {}) {
   function headerHTML() {
     /* 顶部不再显示词书栏（书名 / 今日目标）：开始页已有这些信息，
        学习时把纵向空间留给词卡本身。进度条保留，作为本轮进度指示。 */
-    return `<div class="progress-line"><i></i></div>`;
+    return `<div class="study-top"><div class="progress-line"><i></i></div>${searchButtonHTML()}</div>`;
   }
 
   function deckHTML() {
@@ -736,6 +738,7 @@ export function createStudyView({ onBookChange, onGoReview } = {}) {
     el.querySelectorAll('[data-book]').forEach((b) => b.addEventListener('click', openBookSheet));
     el.querySelector('[data-review]')?.addEventListener('click', () => onGoReview?.());
     el.querySelector('[data-start-study]')?.addEventListener('click', startSession);
+    bindSearchButton(el);
   }
 
   function openBookSheet() {
@@ -827,11 +830,13 @@ export function openDeckPage({ title, subtitle, words, mode = 'review', onDone, 
     title,
     subtitle,
     content: wrap,
+    headExtra: searchButtonHTML(),
     onClose: () => {
       controller?.destroy();
       onDone?.();
     }
   });
+  bindSearchButton(page.page);
   page.page.classList.add('page-deck');
   const deckEl = wrap.querySelector('#dp-deck');
   controller = mountDeck(deckEl, words, {

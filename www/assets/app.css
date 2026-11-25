@@ -873,3 +873,38 @@
   align-items: stretch;
   gap: 0;
 }
+
+/* ---- 搜词：在线词典 / AI 兜底结果 ---- */
+.online-card { display: flex; flex-direction: column; gap: 6px; }
+.online-card .ui-item { width: 100%; }
+.online-lookup {
+  display: block;
+  margin: 12px auto 0;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.online-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.online-detail[hidden] { display: none; }
+.online-mean {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.online-mean .om-body { min-width: 0; }
+.online-mean p { margin: 0; }
+.online-mean .tiny { display: block; margin-top: 2px; }

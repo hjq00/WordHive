@@ -4,6 +4,7 @@ import * as store from '../core/store.js';
 import { relativeDue, stateLabel, retention } from '../core/srs.js';
 import { openDeckPage } from './study.js';
 import { openWordDetail } from './detail.js';
+import { searchButtonHTML, bindSearchButton } from './search.js';
 
 /**
  * 复习页。
@@ -322,7 +323,10 @@ export function createReviewView({ onGoStudy } = {}) {
           <h1>复习</h1>
           <p class="sub">${esc(book.name)} · 按记忆曲线安排</p>
         </div>
-        <span class="ui-badge accent">${icon('flame', 12)} 连续 ${stats.streak} 天</span>
+        <div class="row" style="gap:8px;align-items:center">
+          ${searchButtonHTML()}
+          <span class="ui-badge accent">${icon('flame', 12)} 连续 ${stats.streak} 天</span>
+        </div>
       </div>
 
       <section class="rv-hero">
@@ -546,6 +550,7 @@ export function createReviewView({ onGoStudy } = {}) {
         if (word) openWordDetail(word, { onClose: render });
       })
     );
+    bindSearchButton(el);
   }
 
   render();

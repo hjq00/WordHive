@@ -3,6 +3,7 @@ import { esc, h, toast, highlight } from '../core/ui.js';
 import * as store from '../core/store.js';
 import { generate, hasLLM, TOPICS } from '../core/ai.js';
 import { openDeckPage } from './study.js';
+import { searchButtonHTML, bindSearchButton } from './search.js';
 
 const LEVELS = [
   { id: 'basic', name: '基础', desc: '短句为主' },
@@ -63,7 +64,10 @@ export function createAIView({ onGoStudy } = {}) {
     <div class="page">
       <div class="page-head">
         <div><h1>AI 学习</h1><p class="sub">用你正在背的词，生成只属于你的阅读</p></div>
-        <span class="chip ${hasLLM(st.settings) ? 'accent' : ''}">${hasLLM(st.settings) ? esc(st.settings.api.model || '大模型') : '本地引擎'}</span>
+        <div class="row" style="gap:8px;align-items:center">
+          ${searchButtonHTML()}
+          <span class="chip ${hasLLM(st.settings) ? 'accent' : ''}">${hasLLM(st.settings) ? esc(st.settings.api.model || '大模型') : '本地引擎'}</span>
+        </div>
       </div>
 
       <div class="ai-tabs">
@@ -207,6 +211,7 @@ export function createAIView({ onGoStudy } = {}) {
         onGo: () => onGoStudy?.()
       });
     });
+    bindSearchButton(el);
   }
 
   async function run() {

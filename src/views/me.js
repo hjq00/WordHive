@@ -6,6 +6,7 @@ import { BOOKS } from '../data/books.js';
 import { hasLLM } from '../core/ai.js';
 import { speechSupported } from '../core/speech.js';
 import { sensHint } from '../core/sens.js';
+import { searchButtonHTML, bindSearchButton } from './search.js';
 
 export function createMeView({ onGoReview, onNotifyChange } = {}) {
   const el = h('<div class="screen"></div>');
@@ -30,7 +31,10 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
     <div class="page">
       <div class="page-head">
         <div><h1>我的</h1><p class="sub">${st.demo ? '示例数据 · 可随时清空' : '所有数据保存在本机'}</p></div>
-        <button class="icon-btn" data-export aria-label="导出">${icon('download', 18)}</button>
+        <div class="row" style="gap:6px">
+          ${searchButtonHTML()}
+          <button class="icon-btn" data-export aria-label="导出">${icon('download', 18)}</button>
+        </div>
       </div>
 
       <section class="review-hero" style="background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:var(--shadow-sm)">
@@ -401,6 +405,7 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
         })
       );
     });
+    bindSearchButton(el);
   }
 
   render();
