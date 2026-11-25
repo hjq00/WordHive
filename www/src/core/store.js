@@ -29,6 +29,8 @@ const DEFAULTS = {
     notifySmart: true,
     notifyMax: 2,
     notifyTone: 'gentle',
+    /* 仅在有到期词时提醒：默认关，清完复习的日子仍保留一条基线提醒，避免用户彻底失联 */
+    notifyOnlyDue: false,
     /* 是否已经在启动时走过一次通知授权流程：true 后不再自动弹系统权限框 */
     notifyAsked: false
   },

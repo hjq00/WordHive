@@ -90,7 +90,9 @@ function bodyFor(tone, priority, dueCount) {
  * @param {number} [ctx.lastNotifyAt] 上次通知时间戳
  * @param {number} [ctx.notifyToday] 今日已通知次数
  * @param {{hour:number, confidence:number}} [ctx.peak] peakStudyHour 结果
- * @returns {{slots:Array<{id:number,hour:number,minute:number,title:string,body:string,priority:string}>, reason:string, peakHour:number}}
+ * @returns {{slots:Array<{id:number,hour:number,minute:number,title:string,body:string,priority:string}>, reason:string, suppress?:boolean, peakHour:number}}
+ *          suppress=true 表示「用户主动要求无到期词时不提醒」，是有效意图，
+ *          与「异常空计划」（slots 为空但没有 suppress）严格区分：后者由 schedulePlan 兜底。
  */
 export function planNotifications(ctx = {}) {
   const now = Number(ctx.now) || Date.now();
@@ -122,12 +124,13 @@ export function planNotifications(ctx = {}) {
     plain: 'WordHive 每日提醒：暂无到期词。'
   };
 
-  /* 次数达上限（frequency_cap）时**有**到期词，只是今天不再催：
-     文案必须带上真实到期数，绝不能说「没有到期的词」——事实相反 */
+  /* 次数达上限（frequency_cap）时**有**到期词，只是今天不再催。
+     文案不带数字：槽位是 every:'day' 重复的，隔天用户没打开 App 重算时，
+     写死的 N 会变成昨天的快照，与事实不符。 */
   const CAPPED_BODY = {
-    gentle: `今天还有 ${dueCount} 个词到期，今天先到这儿，明天早点来清。`,
-    lively: `${dueCount} 个词还在等你，明天早点来清掉。`,
-    plain: `WordHive 提醒：还有 ${dueCount} 个词到期。`
+    gentle: '今天的复习提醒已到上限，明天早点来清到期的词。',
+    lively: '今天就到这儿，明天早点来清到期的词！',
+    plain: 'WordHive 提醒：今日通知已达上限，明天继续。'
   };
 
   /**
@@ -138,7 +141,7 @@ export function planNotifications(ctx = {}) {
    * 就再也不会收到任何提醒（这正是「从不打开应用/清完复习后收不到提醒」的根因）。
    * 所以 no_due / frequency_cap 也返回一条 id=1100 的低优先级兜底提醒，
    * 时间取基准时间（智能高峰有置信度时用高峰小时，否则用 remindAt），并过静默时段顺延。
-   * 文案按 reason 分流：no_due 说「来学新词」，frequency_cap 说「还有 N 个词到期」。
+   * 文案按 reason 分流：no_due 说「来学新词」，frequency_cap 说「明天再清」（不带数字）。
    *
    * @param {string} reason 'no_due' | 'frequency_cap'
    */
@@ -160,7 +163,16 @@ export function planNotifications(ctx = {}) {
     };
   };
 
-  if (dueCount <= 0) return makeBaseline('no_due');
+  if (dueCount <= 0) {
+    /* 用户主动要求「没有到期词的日子不提醒」。
+       必须用显式 suppress=true 表达，不能返回空 slots：schedulePlan 把空 slots
+       视为异常空计划，会走 fallbackSlot 兜底注册一条，那样这个开关就失效了。
+       suppress 只在这一支出现；其它分支都不带该标志。 */
+    if (settings.notifyOnlyDue === true) {
+      return { slots: [], reason: 'muted_by_user', suppress: true, peakHour };
+    }
+    return makeBaseline('no_due');
+  }
 
   const maxRaw = Number(settings.notifyMax) || 2;
   const max = Math.min(3, Math.max(1, Math.trunc(maxRaw)));

@@ -79,6 +79,10 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
           ${notifOn ? '<span class="chip accent">已开启</span>' : notifPerm === 'unsupported' ? '<span class="chip">不支持</span>' : notifPerm === 'denied' ? '<span class="chip">已被拒绝，请在系统设置中开启</span>' : `<button class="chip-btn" data-notify>开启通知</button>`}
         </div>
         <div class="setting">
+          <div class="lbl"><b>仅在有到期词时提醒</b><span>开启后，没有待复习词的日子不会提醒；若期间有新词到期且未打开应用，不会收到通知</span></div>
+          <button class="switch ${s.notifyOnlyDue ? 'on' : ''}" data-switch="notifyOnlyDue" aria-label="仅在有到期词时提醒"></button>
+        </div>
+        <div class="setting">
           <div class="lbl"><b>智能提醒时间</b><span>按你的复习高峰自动选提醒时间</span></div>
           <button class="switch ${s.notifySmart !== false ? 'on' : ''}" data-switch="notifySmart" aria-label="智能提醒时间"></button>
         </div>
@@ -207,7 +211,7 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
       <div class="card" style="padding:16px">
         <div class="row between" style="align-items:baseline">
           <b style="font-size:16px;letter-spacing:0.2px">WordHive</b>
-          <span class="tiny muted">v1.0</span>
+          <span class="tiny muted">v1.1</span>
         </div>
         <p class="small" style="margin:6px 0 10px;line-height:1.7">把单词酿成记忆。</p>
         <p class="tiny muted" style="margin:0;line-height:1.75">
@@ -260,7 +264,7 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
         const next = !store.getState().settings[key];
         store.setSetting(key, next);
         if (key === 'dark') document.documentElement.dataset.theme = next ? 'dark' : 'light';
-        if (key === 'notifySmart') onNotifyChange?.();
+        if (key === 'notifySmart' || key === 'notifyOnlyDue') onNotifyChange?.();
         render();
       })
     );

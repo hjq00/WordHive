@@ -209,7 +209,7 @@ function fallbackSlot(plan) {
 
 /**
  * 按智能方案注册每日通知（仅原生生效）。
- * @param {{slots: Array<{id:number,title:string,body:string,hour:number,minute:number}>, peakHour?:number}} plan
+ * @param {{slots: Array<{id:number,title:string,body:string,hour:number,minute:number}>, peakHour?:number, suppress?:boolean}} plan
  * @returns {Promise<boolean>} 任一槽位失败返回 false；Web 环境返回 false
  */
 export async function schedulePlan(plan) {
@@ -218,6 +218,10 @@ export async function schedulePlan(plan) {
   const cancelIds = [{ id: DAILY_ID }, ...PLAN_IDS.map((id) => ({ id }))];
   try {
     await p.cancel({ notifications: cancelIds });
+    /* 用户主动要求静默（无到期词时不提醒）：取消旧排期后直接结束，不注册任何通知。
+       必须认显式的 suppress===true；不能把 slots 为空当静默 —— 空计划是异常，
+       下面仍需走 fallbackSlot，否则又回到「清完复习后彻底失联」的老问题。 */
+    if (plan?.suppress === true) return true;
     const slots = Array.isArray(plan?.slots) ? plan.slots : [];
     /* 空方案不能只取消：至少保留一条每日基线提醒，否则关掉 App 就再无提醒 */
     const targets = slots.length ? slots : [fallbackSlot(plan)];
