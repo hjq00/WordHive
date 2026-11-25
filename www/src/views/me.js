@@ -5,6 +5,7 @@ import * as notify from '../core/notify.js';
 import { BOOKS } from '../data/books.js';
 import { hasLLM } from '../core/ai.js';
 import { speechSupported } from '../core/speech.js';
+import { sensHint } from '../core/sens.js';
 
 export function createMeView({ onGoReview, onNotifyChange } = {}) {
   const el = h('<div class="screen"></div>');
@@ -102,7 +103,7 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
           </select>
         </div>
         <div class="setting">
-          <div class="lbl"><b>停留判定</b><span>${s.sensitivity === 'strict' ? '2.2s / 4s，更敏感' : s.sensitivity === 'loose' ? '1.1s / 6.5s，更宽容' : '2.3s / 6s，推荐'}</span></div>
+          <div class="lbl"><b>停留判定</b><span>${sensHint(s.sensitivity)}</span></div>
           <select data-sens style="width:90px;padding:7px 8px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);font-size:12.5px">
             <option value="loose" ${s.sensitivity === 'loose' ? 'selected' : ''}>宽松</option>
             <option value="standard" ${s.sensitivity === 'standard' ? 'selected' : ''}>标准</option>
@@ -283,6 +284,8 @@ export function createMeView({ onGoReview, onNotifyChange } = {}) {
     el.querySelector('[data-notify]')?.addEventListener('click', async () => {
       const granted = await notify.request();
       notifState = await notify.status();
+      /* 用户已经走过一次授权流程（无论同意还是拒绝），启动时不再自动弹系统框 */
+      store.setSetting('notifyAsked', true);
       if (granted) {
         onNotifyChange?.();
         toast('已开启：每天到点提醒，App 关闭也有效');

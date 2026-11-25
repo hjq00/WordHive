@@ -184,8 +184,32 @@ export async function notifyDue(dueCount) {
 }
 
 /**
+ * 空方案时的兜底槽位。
+ *
+ * schedulePlan 是「先取消再注册」，拿到空 slots 就等于把提醒全清空 —— 用户清完复习、
+ * 或者当天次数已达上限之后，只要不再打开 App 就再也收不到提醒。所以这里兜一条每日提醒：
+ * 时间取 plan.peakHour（没有就用 20:00），并沿用 23:00–07:00 静默时段顺延到 08:00。
+ *
+ * @param {{peakHour?:number}} [plan]
+ * @returns {{id:number,hour:number,minute:number,title:string,body:string}}
+ */
+function fallbackSlot(plan) {
+  const h = Number(plan?.peakHour);
+  let hour = Number.isFinite(h) ? Math.min(23, Math.max(0, Math.trunc(h))) : 20;
+  let minute = 0;
+  if (hour >= 23 || hour <= 7) { hour = 8; minute = 0; }
+  return {
+    id: PLAN_IDS[0],
+    hour,
+    minute,
+    title: 'WordHive · 该复习了',
+    body: '打开 WordHive，按记忆曲线安排今天的复习。'
+  };
+}
+
+/**
  * 按智能方案注册每日通知（仅原生生效）。
- * @param {{slots: Array<{id:number,title:string,body:string,hour:number,minute:number}>}} plan
+ * @param {{slots: Array<{id:number,title:string,body:string,hour:number,minute:number}>, peakHour?:number}} plan
  * @returns {Promise<boolean>} 任一槽位失败返回 false；Web 环境返回 false
  */
 export async function schedulePlan(plan) {
@@ -195,7 +219,9 @@ export async function schedulePlan(plan) {
   try {
     await p.cancel({ notifications: cancelIds });
     const slots = Array.isArray(plan?.slots) ? plan.slots : [];
-    for (const slot of slots) {
+    /* 空方案不能只取消：至少保留一条每日基线提醒，否则关掉 App 就再无提醒 */
+    const targets = slots.length ? slots : [fallbackSlot(plan)];
+    for (const slot of targets) {
       await p.schedule({
         notifications: [
           {

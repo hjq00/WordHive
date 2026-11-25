@@ -231,6 +231,8 @@ function showReminder(count, body) {
 let planTimer = null;
 let planDay = '';
 let planSig = '';
+/* 本次运行是否已成功排过提醒：用户可能在系统设置里刚打开权限，回前台要能补排 */
+let planReady = false;
 async function refreshNotificationPlan() {
   try {
     const st = store.getState();
@@ -252,7 +254,35 @@ async function refreshNotificationPlan() {
     });
     const perm = await notify.status();
     if (perm.display !== 'granted') return;
-    await notify.schedulePlan(plan);
+    const ok = await notify.schedulePlan(plan);
+    if (ok !== false) planReady = true;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/**
+ * 首次启动主动申请一次通知权限。
+ *
+ * 之前权限只能在「我的」页手动点「开启通知」拿，而新用户从第一屏直接进学习页，
+ * 永远不会授权 → schedulePlan 拿不到 granted → 到点提醒从来没注册过。
+ * 只弹一次：走完流程（无论同意/拒绝）立刻把 settings.notifyAsked 置 true。
+ */
+let notifyAskOnce = false;
+async function ensureNotifyPermission() {
+  if (notifyAskOnce) return;
+  try {
+    if (store.getState().settings.notifyAsked === true) return;
+    notifyAskOnce = true;
+    let granted = false;
+    try {
+      granted = await notify.request();
+    } catch (_) {
+      /* Web 端在无用户手势时 requestPermission 可能抛错，忽略即可 */
+      granted = false;
+    }
+    store.setSetting('notifyAsked', true);
+    if (granted) await refreshNotificationPlan();
   } catch (err) {
     console.error(err);
   }
@@ -285,6 +315,8 @@ if (deepWord) {
 // 智能通知排期：启动时算一次（内部检查授权；未授权也保留应用内提醒条）
 planDay = store.dateKey();
 refreshNotificationPlan();
+// 延迟一点再要权限：别和首屏渲染、首组词加载抢主线程 / 打断操作
+setTimeout(ensureNotifyPermission, 2500);
 
 checkReminder();
 reminderTimer = setInterval(checkReminder, 60000);
@@ -294,6 +326,13 @@ document.addEventListener('visibilitychange', () => {
   if (day !== planDay) {
     planDay = day;
     refreshNotificationPlan();
+  } else {
+    /* 用户可能在系统设置里刚打开通知权限；回前台时若还没排过就补排一次 */
+    notify.status().then((st) => {
+      if (st.display === 'granted' && (planSig === '' || !planReady)) {
+        refreshNotificationPlan();
+      }
+    }).catch(() => {});
   }
   checkReminder();
 });

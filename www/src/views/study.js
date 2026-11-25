@@ -5,12 +5,7 @@ import * as store from '../core/store.js';
 import { blankCard, previewIntervals, stateLabel } from '../core/srs.js';
 import { openWordDetail, sylToggleAttrs, bindSyllableToggle, swipeBlockHTML, bindSwipe } from './detail.js';
 import { BOOKS } from '../data/books.js';
-
-const SENS = {
-  loose: { fast: 1.1, slow: 6.5, name: '宽松' },
-  standard: { fast: 2.3, slow: 6, name: '标准' },
-  strict: { fast: 2.2, slow: 4, name: '严格' }
-};
+import { sensOf } from '../core/sens.js';
 
 const RING = 2 * Math.PI * 9;
 let lastDeck = null;
@@ -133,7 +128,7 @@ function doneSlideHTML(hideMore = false, mode = 'learn') {
 export function mountDeck(deckEl, words, opts = {}) {
   const mode = opts.mode || 'learn';
   const settings = store.getState().settings;
-  const sens = SENS[settings.sensitivity] || SENS.standard;
+  const sens = sensOf(settings);
   deckEl.innerHTML = words.map((w, i) => slideHTML(w, i, words.length, mode, settings)).join('') + doneSlideHTML(opts.hideMore, mode);
   /* 单词点击切换音节（每张卡独立绑定，幂等，不参与判定信号） */
   bindSyllableToggle(deckEl);

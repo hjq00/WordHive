@@ -113,12 +113,49 @@ export function planNotifications(ctx = {}) {
     peakHour = base.hour;
   }
 
-  const empty = (reason) => ({ slots: [], reason, peakHour });
-  if (dueCount <= 0) return empty('no_due');
+  const tone = TONES.includes(settings.notifyTone) ? settings.notifyTone : 'gentle';
+
+  /* 基线文案：没有到期词时也不能催复习，改成「来学新词」的口吻，语气跟档位一致 */
+  const BASE_BODY = {
+    gentle: '今天暂时没有到期的词，打开 WordHive 学几个新词吧。',
+    lively: '今天没有到期的词，来学几个新的？',
+    plain: 'WordHive 每日提醒：暂无到期词。'
+  };
+
+  /**
+   * 基线槽位：永远至少排一条每日提醒。
+   *
+   * 为什么必须有：schedulePlan 的做法是「先取消 1001/1100/1101/1102，再按 slots 注册」。
+   * 一旦返回空 slots，等于把所有已注册提醒清空；用户清完今天的复习后只要不再打开 App，
+   * 就再也不会收到任何提醒（这正是「从不打开应用/清完复习后收不到提醒」的根因）。
+   * 所以 no_due / frequency_cap 也返回一条 id=1100 的低优先级兜底提醒，
+   * 时间取基准时间（智能高峰有置信度时用高峰小时，否则用 remindAt），并过静默时段顺延。
+   *
+   * @param {string} reason 'no_due' | 'frequency_cap'
+   */
+  const makeBaseline = (reason) => {
+    const at = quietHour(base.hour, base.minute);
+    return {
+      slots: [
+        {
+          id: 1100,
+          hour: at.hour,
+          minute: at.minute,
+          title: titleFor(tone),
+          body: BASE_BODY[tone],
+          priority: 'low'
+        }
+      ],
+      reason,
+      peakHour
+    };
+  };
+
+  if (dueCount <= 0) return makeBaseline('no_due');
 
   const maxRaw = Number(settings.notifyMax) || 2;
   const max = Math.min(3, Math.max(1, Math.trunc(maxRaw)));
-  if ((Number(ctx.notifyToday) || 0) >= max) return empty('frequency_cap');
+  if ((Number(ctx.notifyToday) || 0) >= max) return makeBaseline('frequency_cap');
 
   const gapRaw = settings.notifyGapMin == null ? NaN : Number(settings.notifyGapMin);
   const gap = Number.isFinite(gapRaw) ? gapRaw : 120;
@@ -127,7 +164,6 @@ export function planNotifications(ctx = {}) {
   const priority = (dueCount >= 30 || overdueCount >= 15)
     ? 'high'
     : (dueCount >= 10 ? 'medium' : 'low');
-  const tone = TONES.includes(settings.notifyTone) ? settings.notifyTone : 'gentle';
   const title = titleFor(tone);
   const baseBody = bodyFor(tone, priority, dueCount);
 

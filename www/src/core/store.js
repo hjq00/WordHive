@@ -28,7 +28,9 @@ const DEFAULTS = {
     targetRetention: 0.9,
     notifySmart: true,
     notifyMax: 2,
-    notifyTone: 'gentle'
+    notifyTone: 'gentle',
+    /* 是否已经在启动时走过一次通知授权流程：true 后不再自动弹系统权限框 */
+    notifyAsked: false
   },
   cards: {},
   favs: [],
